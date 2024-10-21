@@ -1,0 +1,44 @@
+grumphp:
+  tasks:
+    phpcs:
+      standard: phpcs.xml
+
+    phpcpd:
+      directory: ['.']
+      exclude: ['vendor', 'var']
+      fuzzy: false
+      min_lines: 5
+      min_tokens: 70
+      triggered_by: ['php']
+    
+    phpmd:
+      whitelist_patterns: []
+      exclude: ['vendor', 'var']
+      report_format: text
+      ruleset: ['phpmd_ruleset.xml']
+      triggered_by: ['php']
+
+    phpstan:
+      level: 5
+
+    phpunit:
+      config_file: ./phpunit.xml
+      always_execute: true
+
+    clover_coverage:
+      clover_file: ./var/log/coverage/clover.xml
+      minimum_level: 50
+      target_level: 80
+
+    securitychecker_enlightn:
+      lockfile: ./composer.lock
+      run_always: false
+
+  environment:
+    variables:
+      XDEBUG_MODE: coverage
+
+  
+  ascii:
+    failed: grumphp-grumpy.txt # on peut mettre ~ pour ne pas avoir d'image dans la console
+    succeeded: grumphp-happy.txt # idem
