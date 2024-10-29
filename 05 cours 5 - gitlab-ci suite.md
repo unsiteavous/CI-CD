@@ -42,7 +42,7 @@ test:
     - composer coverage
   variables:
     XDEBUG_MODE: coverage
-  coverage: '/Lines:\s*(\d+(\.\d+)?%?)/'
+  coverage: '/^\s*Lines:\s*\d+.\d+\%/'
   artifacts:
     reports:
       coverage_report:
