@@ -45,7 +45,7 @@ test:
   stage: test
   variables:
     XDEBUG_MODE: coverage
-  coverage: '/^\s*Lines:\s*\d+.\d+\%/'
+  coverage: '/Lines:\s*(\d+(\.\d+)?%?)/'
   script:
     - echo "Tests en cours..."
     - composer grumphp
@@ -66,10 +66,35 @@ push_preprod:
   before_script:
     - apk add --no-cache git
   script:
+    - |
+      cat <<- EOF > .gitignore
+      .editorconfig
+      *.xml
+      *.lock
+      *.disabled
+      *.json
+      rector.php
+      codeception.yml
+      grumphp.yml
+
+      src/Tests/
+      tests/
+
+      vendor/
+      var/
+      vendor-bin/
+
+      EOF
+
     - git config --global user.email "robot@cicd.gitlab"
     - git config --global user.name "Robot CICD"
-    # - git push -u --force "https://gitlab-ci-token:${CICD_ROBOT_PWD}@gitlab.com/unsiteavous/cicd.git" HEAD:refs/heads/preprod
-    - git push -u --force "https://gitlab-ci-token:${CICD_ROBOT_PWD}@git.captp.fr/theophile/tests-et-ci-cd.git" HEAD:refs/heads/preprod
+
+    - git rm -r --cached .
+    - git add .
+    - git commit -m "Update .gitignore" -n || echo "No changes to commit"
+
+    - git push -u --force "https://gitlab-ci-token:${CICD_ROBOT_PWD}@gitlab.com/unsiteavous/cicd.git" HEAD:refs/heads/preprod
+    # - git push -u --force "https://gitlab-ci-token:${CICD_ROBOT_PWD}@git.captp.fr/theophile/tests-et-ci-cd.git" HEAD:refs/heads/preprod
 
   only:
     - main
@@ -85,7 +110,7 @@ deploy_preprod:
 
     - WORKDIR=$(pwd)
     - echo "Répertoire de travail :" . $WORKDIR
-    - lftp sftp://${FTP_USER}:${FTP_PWD}@${FTP_HOST} -e "set sftp:auto-confirm yes; set net:timeout 300; set net:max-retries 3; cd ./deploy_test/; mirror -R -v --only-newer --delete --exclude .git/ --exclude .gitignore --exclude-glob '*.yml' --exclude-glob '*.disabled' --exclude vendor/ --exclude composer.json --exclude composer.lock --exclude tests/ --exclude-glob '*.xml' --exclude src/Tests $WORKDIR/ ./; quit"
+    - lftp sftp://${FTP_USER}:${FTP_PWD}@${FTP_HOST} -e "set sftp:auto-confirm yes; set net:timeout 300; set net:max-retries 3; cd ./deploy_test/; mirror -R -v --only-newer --delete $WORKDIR/ ./; quit"
 
   only:
     - preprod
@@ -98,8 +123,8 @@ push_prod:
   script:
     - git config --global user.email "robot2@cicd.gitlab"
     - git config --global user.name "Robot2 CICD"
-    # - git push -u --force "https://gitlab-ci-token:${CICD_ROBOT_PWD2}@gitlab.com/unsiteavous/cicd.git" HEAD:refs/heads/prod
-    - git push -u --force "https://gitlab-ci-token:${CICD_ROBOT_PWD2}@git.captp.fr/theophile/tests-et-ci-cd.git" HEAD:refs/heads/prod
+    - git push -u --force "https://gitlab-ci-token:${CICD_ROBOT_PWD2}@gitlab.com/unsiteavous/cicd.git" HEAD:refs/heads/prod
+    # - git push -u --force "https://gitlab-ci-token:${CICD_ROBOT_PWD2}@git.captp.fr/theophile/tests-et-ci-cd.git" HEAD:refs/heads/prod
 
   only: 
     - preprod
@@ -116,9 +141,9 @@ deploy_prod:
     - WORKDIR=$(pwd)
     - echo "Répertoire de travail :" . $WORKDIR
 
-    - lftp sftp://${FTP_USER}:${FTP_PWD}@${FTP_HOST} -e "set sftp:auto-confirm yes; set net:timeout 300; set net:max-retries 3; cd ./deploy_test/; mirror -R -v --only-newer --delete --exclude .git/ --exclude .gitignore --exclude-glob '*.yml' --exclude-glob '*.disabled' --exclude vendor/ --exclude composer.json --exclude composer.lock --exclude tests/ --exclude-glob '*.xml' --exclude src/Tests $WORKDIR/ ./; quit"
+    - lftp sftp://${FTP_USER}:${FTP_PWD}@${FTP_HOST} -e "set sftp:auto-confirm yes; set net:timeout 300; set net:max-retries 3; cd ./deploy_test/; mirror -R -v --only-newer --delete $WORKDIR/ ./; quit"
 
-    # - lftp sftp://${FTP_USER}:${FTP_PWD}@${FTP_HOST} -e "set sftp:auto-confirm yes; cd ./deploy_test/; mrm -r *; mirror -R -v --exclude .git/ --exclude .gitignore --exclude-glob '*.yml' --exclude vendor/ --exclude composer.json --exclude composer.lock --exclude tests/ --exclude-glob '*.xml' --exclude src/Tests $WORKDIR/ ./; quit"
+    # - lftp sftp://${FTP_USER}:${FTP_PWD}@${FTP_HOST} -e "set sftp:auto-confirm yes; cd ./deploy_test/; mrm -r *; mirror -R -v --exclude .git/ --exclude .gitignore --exclude-glob '*.yml' --exclude vendor/ --exclude composer.json --exclude composer.lock --exclude .editorconfig --exclude rector.php --exclude tests/ --exclude-glob '*.xml' --exclude src/Tests $WORKDIR/ ./; quit"
 
   only:
     - prod
@@ -144,6 +169,21 @@ Lorsque vous définissez des variables dans gitlab, attention à la case "proté
 Deux possibilités s'offrent à vous : 
 - Ne pas marquer comme protégées vos variables
 - protéger vos branches (depuis paramètres > dépôt > branches protégées)
+
+## .gitignore
+Pour éviter de stocker dans les branches de preprod et de prod des fichiers qui n'ont pas à être en production (tout ce qui concerne les tests par exemple), jusqu'à présent nous excluions les fichiers lors du transfert SFTP.
+Sauf que tous ces fichiers étaient tout de même dans le dépot. 
+
+Ici, nous choisissons d'exclure grâce au .gitignore les fichiers directement des dépôts de preprod et de prod.
+Avec `cat <<- EOF > .gitignore`, nous ecrivons les lignes nécessaires dans le .gitignore, jusqu'au `EOF` suivant.
+
+Ensuite, nous modifions la mémoire de git pour qu'il revoit son exclusion de fichiers avec ces lignes : 
+```yml
+  - git rm -r --cached .
+  - git add .
+  - git commit -m "Update .gitignore" -n || echo "No changes to commit"
+```
+Cela nous permet aussi de simplifier nos lignes de SFTP, car les fichiers à exclure n'existant plus, il n'y a plus besoin de les exclure !
 
 ## transfert sftp
 Lors du transfert, vous aurez la possibilité de faire du SFTP si votre utilisateur est créé avec SSH. 
